@@ -127,7 +127,7 @@ function normalize(raw_path:string) {
 }
 
 async function selectEnvironment(context: vscode.ExtensionContext) {
-    // 1. Get configuration (load from shell if necessary)
+    // 1. Get configuration
     let config: MambaConfig;
     try {
         config = await getMambaConfig();
@@ -145,36 +145,60 @@ async function selectEnvironment(context: vscode.ExtensionContext) {
     const content = fs.readFileSync(config.envTxtPath, 'utf-8');
     const lines = content.split(/[\r\n]+/).filter(line => line.trim() !== '');
 
-    // 3. Prepare groups (Workspace vs Root)
+    // 3. Prepare context (Workspace path & Current Active Env)
     const workspaceFolders = vscode.workspace.workspaceFolders;
     const currentWorkspacePath = workspaceFolders ? normalize(workspaceFolders[0].uri.fsPath) : null;
+    
+    // Retrieve the currently active environment path from storage
+    const storedPath = context.workspaceState.get<string>('currentMicromambaEnvPath');
+    const currentActivePath = storedPath ? normalize(storedPath) : '';
 
     const workspaceItems: MicromambaEnvItem[] = [];
     const rootItems: MicromambaEnvItem[] = [];
 
-    // Normalize root prefix for comparison
     const normalizedRootPrefix = config.rootPrefix ? normalize(config.rootPrefix) : '';
+    
+    // Keep a reference to the active item to highlight it later
+    let activeItem: MicromambaEnvItem | undefined;
 
     lines.forEach(envPath => {
         const normalizedPath = normalize(envPath);
         const label = path.basename(normalizedPath);
         
+        // Determine if it is the active environment
+        const isActive = currentActivePath === normalizedPath;
+
         const item: MicromambaEnvItem = {
-            label: label,
+            label: label, 
             description: normalizedPath,
             envPath: normalizedPath
         };
 
-        // Categorize
+        // Classification Logic
+        let isWorkspaceEnv = false;
         if (currentWorkspacePath && normalizedPath.startsWith(currentWorkspacePath)) {
-            // It's inside the workspace
-            item.label = `$(project) ${label}`;
+            isWorkspaceEnv = true;
+        }
+
+        // Icon Selection: $(project) for workspace, $(globe) for global
+        let icon = isWorkspaceEnv ? '$(project)' : '$(globe)';
+
+        // Label Formatting
+        if (isActive) {
+            // Add a checkmark AND the type icon + (Active) mention
+            item.label = `$(check) ${icon} ${label}`;
+            item.description = `(Active) ${normalizedPath}`;
+            activeItem = item; // Capture the active item
+        } else {
+            item.label = `${icon} ${label}`;
+        }
+
+        // Add to appropriate list
+        if (isWorkspaceEnv) {
             workspaceItems.push(item);
         } else if (normalizedRootPrefix && normalizedPath.startsWith(normalizedRootPrefix)) {
-            // It's inside the root prefix
             rootItems.push(item);
-        } 
-        // Else: It is an external environment not in root prefix (Ignored based on requirements)
+        }
     });
 
     // 4. Build the picker list
@@ -195,15 +219,29 @@ async function selectEnvironment(context: vscode.ExtensionContext) {
         return;
     }
 
-    // 5. Show menu
-    vscode.window.showQuickPick(pickerItems, {
-        placeHolder: `Select an environment (Source: ${path.basename(config.envTxtPath)})`
-    }).then(selected => {
-        if (selected) {
-            const envItem = selected as MicromambaEnvItem;
-            setEnvironment(context, envItem.envPath, config.exe);
+    // 5. Create and Show Custom QuickPick (allows setting active item)
+    const quickPick = vscode.window.createQuickPick<MicromambaEnvItem | vscode.QuickPickItem>();
+    quickPick.placeholder = `Select an environment (Source: ${path.basename(config.envTxtPath)})`;
+    quickPick.matchOnDescription = true;
+    quickPick.items = pickerItems; 
+
+    // Highlight the currently active environment in the list
+    if (activeItem) {
+        quickPick.activeItems = [activeItem];
+    }
+
+    // Handle events
+    quickPick.onDidAccept(() => {
+        const selected = quickPick.selectedItems[0];
+        // Ensure it's not a separator
+        if (selected && 'envPath' in selected) {
+            setEnvironment(context, (selected as MicromambaEnvItem).envPath, config.exe);
         }
+        quickPick.hide();
     });
+
+    quickPick.onDidHide(() => quickPick.dispose());
+    quickPick.show();
 }
 
 function setEnvironment(context: vscode.ExtensionContext, envPath: string, manualExe?: string) {
@@ -270,8 +308,34 @@ function setEnvironment(context: vscode.ExtensionContext, envPath: string, manua
                     : path.join(prefix, 'bin', 'python');
 
             if (fs.existsSync(pythonPath)) {
+                let finalPath = pythonPath;
+
+                // Check if the environment is inside the current workspace
+                // normalize() is used to ensure casing matches on Windows
+                if (normalize(pythonPath).startsWith(normalize(rootPath))) {
+                    // It is inside! Use ${workspaceFolder}
+                    let relPath = path.relative(rootPath, pythonPath);
+                    if (isWin) {
+                        // Force forward slashes for clean JSON settings
+                        relPath = relPath.split(path.sep).join('/');
+                        // relPath = relPath.replace(/\\/g, '/');
+                    }
+                    finalPath = `\${workspaceFolder}/${relPath}`;
+                    // finalPath = `./${relPath}`;
+                }
+
+                // Update settings only if changed
                 const pythonConfig = vscode.workspace.getConfiguration('python');
-                await pythonConfig.update('defaultInterpreterPath', pythonPath, vscode.ConfigurationTarget.Workspace);
+                const currentPath = pythonConfig.get<string>('defaultInterpreterPath');
+
+                if (currentPath !== finalPath) {
+                    await pythonConfig.update('defaultInterpreterPath', finalPath, vscode.ConfigurationTarget.Workspace);
+                }
+                try {
+                    await vscode.commands.executeCommand("python.clearWorkspaceInterpreter");
+                } catch (e) {
+                    console.log("Impossible de clear l'interpreteur (peut-être que l'extension Python n'est pas chargée)", e);
+                }
             } else {
                 console.log("Environment does not contain Python. Skipping Python extension configuration.");
             }
