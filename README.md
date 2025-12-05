@@ -40,6 +40,26 @@ You can customize the extension in your `settings.json`:
 - micromamba-envs.rootPrefix: (Optional) Manually specify the root prefix to filter global environments. If empty, it is detected via `MAMBA_ROOT_PREFIX`.
 - micromamba-envs.environmentsTxtPath: (Optional) Path to the file listing your environments. Defaults to `~/.conda/environments.txt`.
 
+## Git & Team Workflow
+
+This extension is designed to be friendly with version control systems like Git.
+
+### 1. `settings.json` Handling
+When you select an environment, the extension updates the `python.defaultInterpreterPath` in your workspace settings (`.vscode/settings.json`).
+
+- **Local Environments** (e.g., inside your project folder): The extension uses **relative paths** with `${workspaceFolder}` (e.g., `${workspaceFolder}/.conda/bin/python`). This allows you to commit the `.vscode/settings.json` file so your team automatically uses the correct environment setup.
+- **Global Environments**: The extension uses **absolute paths**. Be careful not to commit `.vscode/settings.json` if you use a machine-specific global path.
+
+### 2. The `.env` File
+To ensure seamless integration with C++ libraries (DLLs) and other tools, this extension generates a `.env` file at the root of your workspace containing all necessary environment variables.
+
+**⚠️ Important:** This file contains local paths and variables. You should add it to your `.gitignore`:
+
+```gitignore
+# .gitignore
+.env
+```
+
 ## Requirements
 - **Micromamba** must be installed.
 - Your shell (Bash, Zsh, PowerShell) should be configured properly (e.g., via micromamba shell init ...) so that `MAMBA_ROOT_PREFIX` is accessible if you don't provide it in settings.
