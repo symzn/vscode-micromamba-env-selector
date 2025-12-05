@@ -71,6 +71,16 @@ To get started with development:
     -   Press `F5` in VS Code to open a new "Extension Development Host" window with the extension running.
     -   You can now test your changes in this new window.
 
+5. **Package creation**
+    - Install packaging tool `vsce`
+    ```bash
+        npm install -g @vscode/vsce
+    ```
+    - Build package
+    ```bash
+        vsce package
+    ```
+
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
