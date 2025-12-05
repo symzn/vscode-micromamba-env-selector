@@ -43,3 +43,34 @@ You can customize the extension in your `settings.json`:
 ## Requirements
 - **Micromamba** must be installed.
 - Your shell (Bash, Zsh, PowerShell) should be configured properly (e.g., via micromamba shell init ...) so that `MAMBA_ROOT_PREFIX` is accessible if you don't provide it in settings.
+
+## Contributing
+
+Contributions are welcome! Please feel free to open an issue to report a bug or suggest a feature. If you want to contribute code, please open a Pull Request.
+
+## Development
+
+To get started with development:
+
+1.  **Clone the repository**:
+    ```bash
+    git clone [https://github.com/symzn/vscode-micromamba-env-selector.git](https://github.com/symzn/vscode-micromamba-env-selector.git)
+    cd vscode-micromamba-env-selector
+    ```
+2.  **Install dependencies**:
+    ```bash
+    npm install
+    ```
+3.  **Compile the code**:
+    ```bash
+    npm run compile
+    ```
+    You can also run `npm run watch` to automatically recompile on file changes.
+
+4.  **Launch in Debug Mode**:
+    -   Press `F5` in VS Code to open a new "Extension Development Host" window with the extension running.
+    -   You can now test your changes in this new window.
+
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
