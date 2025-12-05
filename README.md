@@ -1,0 +1,1 @@
+# vscode-micromamba-env-selector
