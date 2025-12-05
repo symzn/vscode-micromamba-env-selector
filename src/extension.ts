@@ -24,7 +24,7 @@ let cachedMambaConfig: MambaConfig | undefined;
 export function activate(context: vscode.ExtensionContext) {
     // 1. Setup UI
     myStatusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-    myStatusBarItem.command = 'micromamba-envs.select'; // Fixed command ID to match package.json
+    myStatusBarItem.command = 'micromamba-envs.select'; 
     context.subscriptions.push(myStatusBarItem);
 
     // 2. Register Commands
@@ -101,7 +101,6 @@ function fetchMambaVarsFromShell(): Promise<{ rootPrefix: string, exe: string }>
             shellCommand = `powershell -Command "echo $env:MAMBA_ROOT_PREFIX; echo $env:MAMBA_EXE"`;
         } else {
             // Unix: Use bash login shell to load profiles
-            // We echo variables separated by a newline
             shellCommand = `bash -l -c "echo $MAMBA_ROOT_PREFIX; echo $MAMBA_EXE"`;
         }
 
@@ -120,9 +119,14 @@ function fetchMambaVarsFromShell(): Promise<{ rootPrefix: string, exe: string }>
     });
 }
 
-function normalize(raw_path:string) {
+/**
+ * Helper to normalize paths across platforms (handles drive letters on Windows).
+ */
+function normalize(raw_path: string) {
     let norm_path = path.normalize(raw_path);
-    if (process.platform === "win32") {norm_path = norm_path.toLowerCase();}
+    if (process.platform === "win32") {
+        norm_path = norm_path.toLowerCase();
+    }
     return norm_path;
 }
 
@@ -245,12 +249,11 @@ async function selectEnvironment(context: vscode.ExtensionContext) {
 }
 
 function setEnvironment(context: vscode.ExtensionContext, envPath: string, manualExe?: string) {
-    // If called from startup, manualExe might be undefined, so we fetch config again (fast due to cache)
+    // Determine mamba executable
     let binary = manualExe || 'micromamba';
     if (!manualExe && cachedMambaConfig) {
         binary = cachedMambaConfig.exe;
     } else if (!manualExe) {
-        // Should rarely happen if activated correctly, fallback
         const config = vscode.workspace.getConfiguration('micromamba-envs');
         binary = config.get<string>('micromambaBinary') || 'micromamba';
     }
@@ -261,21 +264,15 @@ function setEnvironment(context: vscode.ExtensionContext, envPath: string, manua
     myStatusBarItem.show();
 
     // Construct Shell Command
-    // We use the default shell to leverage user's PATH
+    // Using simple quotes for paths to handle spaces correctly on all platforms
     let shellCommand = '';
-    
-    // Note: We use -p (path) because environments.txt provides absolute paths
     if (os.platform() === 'win32') {
-        // PowerShell
         const cmd = `${binary} run -p '${envPath}' cmd /c set`;
         shellCommand = `powershell -Command "${cmd}"`;
     } else {
-        // Bash (Linux/Mac)
         const cmd = `${binary} run -p '${envPath}' env`;
         shellCommand = `bash -c "${cmd}"`;
     }
-
-    console.log(`Executing: ${shellCommand}`);
 
     cp.exec(shellCommand, { maxBuffer: 1024 * 1024 * 10 }, async (err, stdout, stderr) => {
         if (err) {
@@ -286,6 +283,15 @@ function setEnvironment(context: vscode.ExtensionContext, envPath: string, manua
         }
 
         const envVars = parseEnvOutput(stdout);
+
+        // Fix missing variables for Terminal prompt
+        if (!envVars['CONDA_DEFAULT_ENV']) {
+            envVars['CONDA_DEFAULT_ENV'] = envNameDisplay;
+        }
+        if (!envVars['CONDA_PREFIX']) {
+            envVars['CONDA_PREFIX'] = envPath;
+        }
+
         // 1. Inject into VS Code Terminal
         const envCollection = context.environmentVariableCollection;
         envCollection.clear();
@@ -293,14 +299,14 @@ function setEnvironment(context: vscode.ExtensionContext, envPath: string, manua
             envCollection.replace(key, value);
         }
 
-        // 2. Write .env and configure Python (Plan B)
+        // 2. Configure Python extension
         if (vscode.workspace.workspaceFolders) {
             const rootPath = vscode.workspace.workspaceFolders[0].uri.fsPath;
-            const envFilePath = path.join(rootPath, '.env');
             
-            writeEnvFile(envFilePath, envVars);
-            
-            // Python extension configuration
+            // Write .env file (useful for other tools/extensions)
+            writeEnvFile(path.join(rootPath, '.env'), envVars);
+
+            // Determine Python path inside the environment
             const prefix = envVars['CONDA_PREFIX'] || envPath;
             const isWin = os.platform() === 'win32';
             const pythonPath = isWin 
@@ -310,34 +316,27 @@ function setEnvironment(context: vscode.ExtensionContext, envPath: string, manua
             if (fs.existsSync(pythonPath)) {
                 let finalPath = pythonPath;
 
-                // Check if the environment is inside the current workspace
-                // normalize() is used to ensure casing matches on Windows
+                // Logic to use ${workspaceFolder} if possible (Git friendly)
                 if (normalize(pythonPath).startsWith(normalize(rootPath))) {
-                    // It is inside! Use ${workspaceFolder}
                     let relPath = path.relative(rootPath, pythonPath);
-                    if (isWin) {
-                        // Force forward slashes for clean JSON settings
-                        relPath = relPath.split(path.sep).join('/');
-                        // relPath = relPath.replace(/\\/g, '/');
-                    }
+                    // Force forward slashes for JSON compatibility
+                    relPath = relPath.split(path.sep).join('/');
                     finalPath = `\${workspaceFolder}/${relPath}`;
-                    // finalPath = `./${relPath}`;
                 }
 
-                // Update settings only if changed
                 const pythonConfig = vscode.workspace.getConfiguration('python');
-                const currentPath = pythonConfig.get<string>('defaultInterpreterPath');
-
-                if (currentPath !== finalPath) {
-                    await pythonConfig.update('defaultInterpreterPath', finalPath, vscode.ConfigurationTarget.Workspace);
-                }
+                
+                // Update settings.json
+                await pythonConfig.update('defaultInterpreterPath', finalPath, vscode.ConfigurationTarget.Workspace);
+                
+                // --- CRITICAL FIX ---
+                // Force VS Code to forget any manually selected interpreter
+                // allowing the 'defaultInterpreterPath' setting to take effect immediately.
                 try {
                     await vscode.commands.executeCommand("python.clearWorkspaceInterpreter");
                 } catch (e) {
-                    console.log("Impossible de clear l'interpreteur (peut-être que l'extension Python n'est pas chargée)", e);
+                    console.log("Could not clear workspace interpreter (Python extension might not be active)", e);
                 }
-            } else {
-                console.log("Environment does not contain Python. Skipping Python extension configuration.");
             }
         }
 
@@ -346,15 +345,6 @@ function setEnvironment(context: vscode.ExtensionContext, envPath: string, manua
         myStatusBarItem.text = `$(check) ${envNameDisplay}`;
         myStatusBarItem.tooltip = `Active Env: ${envPath}`;
         myStatusBarItem.show();
-        // const action = await vscode.window.showInformationMessage(
-        //     `Environment "${envNameDisplay}" activated. Open a new terminal to use it.`,
-        //     'Create Terminal'
-        // );
-
-        // if (action === 'Create Terminal') {
-        //     const term = vscode.window.createTerminal(`Micromamba: ${envNameDisplay}`);
-        //     term.show();
-        // }
     });
 }
 
@@ -377,7 +367,7 @@ function parseEnvOutput(output: string): { [key: string]: string } {
 function writeEnvFile(filepath: string, envs: { [key: string]: string }) {
     let content = '';
     for (const [key, value] of Object.entries(envs)) {
-        // Basic escaping
+        // Basic escaping for .env format
         content += `${key}="${value.replace(/"/g, '\\"')}"\n`;
     }
     fs.writeFile(filepath, content, (err) => {
