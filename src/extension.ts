@@ -93,28 +93,21 @@ async function getMambaConfig(): Promise<MambaConfig> {
  */
 function fetchMambaVarsFromShell(): Promise<{ rootPrefix: string, exe: string }> {
     return new Promise((resolve, reject) => {
-        let shellCommand = '';
         const isWin = os.platform() === 'win32';
 
-        if (isWin) {
-            // PowerShell command to print variables
-            shellCommand = `powershell -Command "echo $env:MAMBA_ROOT_PREFIX; echo $env:MAMBA_EXE"`;
-        } else {
-            // Unix: Use bash login shell to load profiles
-            shellCommand = `bash -l -c "echo $MAMBA_ROOT_PREFIX; echo $MAMBA_EXE"`;
-        }
+        const shellCommand = isWin
+            ? `powershell -Command "echo $env:MAMBA_ROOT_PREFIX; echo $env:MAMBA_EXE"`
+            : `bash -ic 'echo $MAMBA_ROOT_PREFIX; echo $MAMBA_EXE'`;
 
-        cp.exec(shellCommand, { timeout: 5000 }, (err, stdout, stderr) => {
-            if (err) {
-                return reject(err);
-            }
+        cp.exec(shellCommand, { timeout: 5000 }, (err, stdout, _stderr) => {
+            if (err) return reject(err);
+
             const lines = stdout.trim().split(/[\r\n]+/);
-            // Expecting line 0: Root Prefix, line 1: Exe
-            const result = {
-                rootPrefix: lines[0] ? lines[0].trim() : '',
-                exe: lines.length > 1 && lines[1] ? lines[1].trim() : ''
-            };
-            resolve(result);
+
+            resolve({
+                rootPrefix: lines[0]?.trim() ?? '',
+                exe: lines[1]?.trim() ?? '',
+            });
         });
     });
 }
@@ -271,7 +264,7 @@ function setEnvironment(context: vscode.ExtensionContext, envPath: string, manua
         shellCommand = `powershell -Command "${cmd}"`;
     } else {
         const cmd = `${binary} run -p '${envPath}' env`;
-        shellCommand = `bash -c "${cmd}"`;
+        shellCommand = `bash -ic "${cmd}"`;
     }
 
     cp.exec(shellCommand, { maxBuffer: 1024 * 1024 * 10 }, async (err, stdout, stderr) => {

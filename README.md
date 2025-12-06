@@ -1,5 +1,8 @@
 # VSCode Micromamba Envs
 
+[![Visual Studio Marketplace Version](https://img.shields.io/visual-studio-marketplace/v/symzn.vscode-micromamba-envs?style=flat-square&label=VS%20Code%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=symzn.vscode-micromamba-envs)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 **Preface**
 This extension is a replacement for my previous extension ([vscode-micromamba-env](https://github.com/symzn/vscode-micromamba-env)). The previous version relied on the `ms-python-envs` API (Environment Provider), which unfortunately suffers from several upstream issues. This new version takes a new standalone approach by directly managing environment variables and interacting with the shell, ensuring a reliable experience for Micromamba users.
 
