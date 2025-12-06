@@ -2,7 +2,7 @@
   "name": "vscode-micromamba-envs",
   "displayName": "Micromamba Envs",
   "description": "Discovers, displays, and sets your micromamba environments.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "symzn",
   "engines": {
     "vscode": "^1.90.0"
@@ -12,7 +12,8 @@
     "url": "https://github.com/symzn/vscode-micromamba-env-selector.git"
   },
   "activationEvents": [
-    "onStartupFinished"
+    "onStartupFinished",
+    "onCommand:micromamba-envs.select"
   ],
   "commands": [
     {

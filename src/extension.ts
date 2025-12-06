@@ -1,3 +1,5 @@
+// src/extension.ts
+
 import * as vscode from 'vscode';
 import * as cp from 'child_process';
 import * as fs from 'fs';
@@ -319,12 +321,13 @@ function setEnvironment(context: vscode.ExtensionContext, envPath: string, manua
 
                 const pythonConfig = vscode.workspace.getConfiguration('python');
                 
-                // Update settings.json
+                // Update defaultInterpreterPath
                 await pythonConfig.update('defaultInterpreterPath', finalPath, vscode.ConfigurationTarget.Workspace);
                 
-                // --- CRITICAL FIX ---
-                // Force VS Code to forget any manually selected interpreter
-                // allowing the 'defaultInterpreterPath' setting to take effect immediately.
+                // Prevents conflicts between our env vars injection and Python extension's activation
+                await pythonConfig.update('terminal.activateEnvironment', false, vscode.ConfigurationTarget.Workspace);
+                
+                // Force Refresh interpreter
                 try {
                     await vscode.commands.executeCommand("python.clearWorkspaceInterpreter");
                 } catch (e) {

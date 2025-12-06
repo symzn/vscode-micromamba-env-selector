@@ -17,6 +17,7 @@ A simple and efficient VS Code extension to discover, select, and activate your 
 - **Activation**:
   - Injects environment variables directly into the VS Code Integrated Terminal.
   - Automatically updates the **Python** extension path (`python.defaultInterpreterPath`).
+  - **Auto-configuration**: Automatically disables `python.terminal.activateEnvironment` in your workspace to prevent conflicts with the standard Python extension.
   - Generates a `.env` file in your workspace root for other tools.
 - **Performance**: Caches critical Micromamba configuration (`MAMBA_ROOT_PREFIX`, `MAMBA_EXE`) by querying your shell only once per session.
 
@@ -39,16 +40,18 @@ You can customize the extension in your `settings.json`:
 }
 ```
 
-- micromamba-envs.micromambaBinary: (Optional) Manually specify the micromamba executable. If left empty, the extension attempts to find it via your shell variables (MAMBA_EXE).
-- micromamba-envs.rootPrefix: (Optional) Manually specify the root prefix to filter global environments. If empty, it is detected via `MAMBA_ROOT_PREFIX`.
-- micromamba-envs.environmentsTxtPath: (Optional) Path to the file listing your environments. Defaults to `~/.conda/environments.txt`.
+- `micromamba-envs.micromambaBinary`: (Optional) Manually specify the micromamba executable. If left empty, the extension attempts to find it via your shell variables (`MAMBA_EXE`).
+- `micromamba-envs.rootPrefix`: (Optional) Manually specify the root prefix to filter global environments. If empty, it is detected via `MAMBA_ROOT_PREFIX`.
+- `micromamba-envs.environmentsTxtPath`: (Optional) Path to the file listing your environments. Defaults to `~/.conda/environments.txt`.
 
 ## Git & Team Workflow
 
 This extension is designed to be friendly with version control systems like Git.
 
 ### 1. `settings.json` Handling
-When you select an environment, the extension updates the `python.defaultInterpreterPath` in your workspace settings (`.vscode/settings.json`).
+When you select an environment, the extension updates your workspace settings (`.vscode/settings.json`):
+1. Sets `python.defaultInterpreterPath` to the selected environment.
+2. Sets `python.terminal.activateEnvironment` to `false` (to avoid conflicts).
 
 - **Local Environments** (e.g., inside your project folder): The extension uses **relative paths** with `${workspaceFolder}` (e.g., `${workspaceFolder}/.conda/bin/python`). This allows you to commit the `.vscode/settings.json` file so your team automatically uses the correct environment setup.
 - **Global Environments**: The extension uses **absolute paths**. Be careful not to commit `.vscode/settings.json` if you use a machine-specific global path.
@@ -65,7 +68,7 @@ To ensure seamless integration with C++ libraries (DLLs) and other tools, this e
 
 ## Requirements
 - **Micromamba** must be installed.
-- Your shell (Bash, Zsh, PowerShell) should be configured properly (e.g., via micromamba shell init ...) so that `MAMBA_ROOT_PREFIX` is accessible if you don't provide it in settings.
+- Your shell (Bash, Zsh, PowerShell) should be configured properly (e.g., via `micromamba shell init ...`) so that `MAMBA_ROOT_PREFIX` is accessible if you don't provide it in settings.
 
 ## Contributing
 
@@ -77,7 +80,7 @@ To get started with development:
 
 1.  **Clone the repository**:
     ```bash
-    git clone [https://github.com/symzn/vscode-micromamba-env-selector.git](https://github.com/symzn/vscode-micromamba-env-selector.git)
+    git clone https://github.com/symzn/vscode-micromamba-env-selector.git
     cd vscode-micromamba-env-selector
     ```
 2.  **Install dependencies**:
@@ -97,11 +100,11 @@ To get started with development:
 5. **Package creation**
     - Install packaging tool `vsce`
     ```bash
-        npm install -g @vscode/vsce
+    npm install -g @vscode/vsce
     ```
     - Build package
     ```bash
-        vsce package
+    vsce package
     ```
 
 ## License

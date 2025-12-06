@@ -2,6 +2,14 @@
 
 All notable changes to the "vscode-micromamba-envs" extension will be documented in this file.
 
+## [0.3.0] - 2025-12-06
+
+### Fixed
+- **Conflict Resolution**: The extension now automatically sets `python.terminal.activateEnvironment` to `false` in the workspace settings when an environment is selected. This prevents the Microsoft Python extension from overriding the environment variables injected by this extension.
+- **Command Registration**: Ensured the command `Micromamba: Select Environment` is properly available in the Command Palette immediately upon activation.
+
+---
+
 ## [0.2.0] - 2025-12-06
 
 ### Fixed
